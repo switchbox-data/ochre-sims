@@ -1,0 +1,71 @@
+state := "NY"
+
+root := "$HOME/Desktop/ochre-sims"
+lib := root + "/lib/resstock"
+data := root + "/data/resstock"
+
+url_base := "https://oedi-data-lake.s3.amazonaws.com/nrel-pds-building-stock/end-use-load-profiles-for-us-building-stock"
+
+version_2022 := "resstock_amy2018_release_1.1"
+url_2022 := url_base + "/2022/" + version_2022
+dir_2022 := "2022_" + version_2022
+
+version_2024 := "resstock_amy2018_release_2"
+url_2024 := url_base + "/2024/" + version_2024
+dir_2024 := "2024_" + version_2024
+
+#annual_results := "metadata_and_annual_results/by_state/state=" + state + "/csv"  
+annual_results := "metadata_and_annual_results/by_state"
+today := `date +%Y%m%d`
+now := `date +%Y%m%d_%H%M`
+db_name := "rs_" + today
+
+annual_2024 state = "NY":
+	mkdir -p {{dir_2024}}
+	wget -P {{dir_2024}} {{url_2024}}/{{annual_results}}/{{state}}_baseline_metadata_and_annual_results.csv
+	wget -P {{dir_2024}} {{url_2024}}/{{annual_results}}/{{state}}_upgrade04_metadata_and_annual_results.csv
+	cat {{lib}}/load_2024_NY_release.sql | duckdb {{data}}/{{dir_2024}}/{{db_name}}.db
+	rm {{dir_2024}}/*_results.csv
+
+download_metadata_2024_docs:
+	mkdir -p {{dir_2024}}
+	wget -P {{dir_2024}} {{url_2024}}/upgrades_lookup.json
+	wget -P {{dir_2024}} {{url_2024}}/data_dictionary.tsv
+	wget -P {{dir_2024}} {{url_2024}}/resstock_documentation_2024_release_2.pdf
+	wget -P {{dir_2024}} {{url_2022}}/geographic_information/spatial_tract_lookup_table.csv
+
+
+# 2022
+monthly_2022 state upgrade columns:
+	echo 'ResStock 2022 Monthly Sums'
+	python {{lib}}/resstock_2022_athena.py --parquet_path={{data}}/"temp/athena_monthly_results.parquet" --state={{state}}  --upgrade={{upgrade}} --columns={{columns}} --agg_frequency="month" --duckdb_path="{{data}}/{{dir_2022}}/{{db_name}}.db"
+	cat {{lib}}/monthly_2022.sql | duckdb {{data}}/{{dir_2022}}/{{db_name}}.db
+	rm {{data}}/"temp/athena_monthly_results.parquet"
+
+daily_2022 state upgrade columns:
+	echo 'ResStock 2022 Daily Sums'
+	python {{lib}}/resstock_2022_athena.py --parquet_path={{data}}/"temp/athena_daily_results.parquet" --state={{state}}  --upgrade={{upgrade}} --columns={{columns}} --agg_frequency="date" --duckdb_path="{{data}}/{{dir_2022}}/{{db_name}}.db"
+	cat {{lib}}/daily_2022.sql | duckdb {{data}}/{{dir_2022}}/{{db_name}}.db
+	rm {{data}}/"temp/athena_daily_results.parquet"
+
+hourly_2022 state upgrade columns:
+	echo 'ResStock 2022 Hourly Sum'
+	python {{lib}}/resstock_2022_athena.py --parquet_path={{data}}/"temp/athena_hourly_results.parquet" --state={{state}}  --upgrade={{upgrade}} --columns={{columns}} --agg_frequency="hour" --duckdb_path="{{data}}/{{dir_2022}}/{{db_name}}.db"
+
+annual_2022 state:
+	mkdir -p {{dir_2022}}
+	wget -P {{dir_2022}} {{url_2022}}/{{annual_results}}/state={{state}}/csv/{{state}}_baseline_metadata_and_annual_results.csv
+	wget -P {{dir_2022}} {{url_2022}}/{{annual_results}}/state={{state}}/csv/{{state}}_upgrade03_metadata_and_annual_results.csv
+	wget -P {{dir_2022}} {{url_2022}}/{{annual_results}}/state={{state}}/csv/{{state}}_upgrade04_metadata_and_annual_results.csv
+	STATE={{state}} duckdb {{data}}/{{dir_2022}}/{{db_name}}.db < {{lib}}/load_2022_release.sql
+	rm {{dir_2022}}/*_results.csv
+
+download_metadata_2022_docs:
+	mkdir -p {{dir_2022}}
+	wget -P {{dir_2022}} {{url_2022}}/upgrades_lookup.json
+	wget -P {{dir_2022}} {{url_2022}}/data_dictionary.tsv
+	wget -P {{dir_2022}} {{url_base}}/2022/EUSS_ResRound1_Technical_Documentation.pdf
+	wget -P {{dir_2022}} {{url_2022}}/geographic_information/spatial_tract_lookup_table.csv
+
+#all_2022: monthly_2022 annual_2022 metadata_2022
+#all_2024: annual_2024 metadata_2024
