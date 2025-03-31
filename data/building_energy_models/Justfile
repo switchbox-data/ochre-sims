@@ -1,8 +1,8 @@
 state := "NY"
 
-root := "$HOME/Desktop/ochre-sims"
-lib := root + "/lib/resstock"
-data := root + "/data/resstock"
+root := "/workspaces/ochre-sims"
+lib := root + "/lib/building_energy_models"
+data := root + "/data/building_energy_models"
 
 url_base := "https://oedi-data-lake.s3.amazonaws.com/nrel-pds-building-stock/end-use-load-profiles-for-us-building-stock"
 
