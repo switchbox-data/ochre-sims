@@ -17,12 +17,20 @@ Date: 4/19/2025
 
 """
 
+def extract_weather_station(file_path):
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            buildingXML = xmltodict.parse(file.read())
+            weather_station_name = buildingXML['HPXML']['Building']['BuildingDetails']['ClimateandRiskZones']['WeatherStation']['Name']
+    except Exception as e:
+        print(f"Error parsing XML {file_path}: {e}")
+
+    return weather_station_name
 
 @click.command()
 @click.argument('building_id', type=int)
 @click.argument('upgrade_id', type=int)
 @click.argument('state', type=str)
-
 def simulate_dwelling(
         building_id:int,
         upgrade_id:int,
@@ -102,18 +110,7 @@ def simulate_dwelling(
                 print(f"Error deleting {path}: {e}")
         else:
             print(f"The directory does not exist: {path}")
-        
-
-
-def extract_weather_station(file_path):
-    try:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            buildingXML = xmltodict.parse(file.read())
-            weather_station_name = buildingXML['HPXML']['Building']['BuildingDetails']['ClimateandRiskZones']['WeatherStation']['Name']
-    except Exception as e:
-        print(f"Error parsing XML {file_path}: {e}")
-
-    return weather_station_name
+    
 
 if __name__ == '__main__':
     simulate_dwelling()
