@@ -1,7 +1,8 @@
 import os
 import xmltodict
+import click
 import pandas as pd
-import datetime as dt
+from datetime import datetime, timedelta
 from datetime import date
 import time
 import shutil
@@ -16,15 +17,21 @@ Date: 4/19/2025
 
 """
 
+
+@click.command()
+@click.argument('building_id', type=int)
+@click.argument('upgrade_id', type=int)
+@click.argument('state', type=str)
+
 def simulate(
         building_id:int,
         upgrade_id:int,
         state:str,
         year=2022,
         version="resstock_amy2018_release_1.1",
-        start_time=dt.datetime(2007, 1, 1, 0, 0),
-        time_res=dt.timedelta(minutes=60),
-        duration=dt.timedelta(days=3),
+        start_time=datetime(2007, 1, 1, 0, 0),
+        time_res=timedelta(minutes=60),
+        duration=timedelta(days=3),
         ):
     """
     simulate: This function runs an OCHRE simulation for a building. It filters the building by the
@@ -87,7 +94,7 @@ def simulate(
     except Exception as e:
         print(f"Simulation failed for bldg{building_id:07}-up{upgrade_id:02}: {e}")
         # Delete failed simulation file
-        path = os.path.join(input_file_path, f"simulation_results")
+        path = os.path.join(input_file_path, "simulation_results")
         if os.path.exists(path):
             try:
                 shutil.rmtree(path)
@@ -108,10 +115,5 @@ def extract_weather_station(file_path):
 
     return weather_station_name
 
-
-"""# Testing functionality
 if __name__ == '__main__':
-    # Example use
-    # Note there are more than 30,000 buildings in the upgrade list. Modify the code to only run a handful of times if looking to test functionality.
-    #fetch_building_xml(state="NY", upgrade=3,year=2022,version="resstock_amy2018_release_1.1")
-    simulate(72, 3, "NY",2022,version="resstock_amy2018_release_1.1",start_time=dt.datetime(2007, 1, 1, 0, 0),time_res=dt.timedelta(minutes=60),duration=dt.timedelta(days=3))"""
+    simulate()
