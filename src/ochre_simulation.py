@@ -23,7 +23,7 @@ Date: 4/19/2025
 @click.argument('upgrade_id', type=int)
 @click.argument('state', type=str)
 
-def simulate(
+def simulate_dwelling(
         building_id:int,
         upgrade_id:int,
         state:str,
@@ -116,4 +116,4 @@ def extract_weather_station(file_path):
     return weather_station_name
 
 if __name__ == '__main__':
-    simulate()
+    simulate_dwelling()
