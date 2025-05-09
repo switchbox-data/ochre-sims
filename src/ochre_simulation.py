@@ -79,7 +79,8 @@ def simulate_dwelling(
     # Save simulation output to /ochre-sims/data/ochre_simulation/state_year_version
     output_filepath = os.path.join(data_folder_path, f"output/ochre_simulation/{state}_{year}_{version}/bldg{building_id:07}-up{upgrade_id:02}")
     os.makedirs(output_filepath, exist_ok=True)
-    try:        
+    try:
+        # If the building id specific schedule file exists, use that. If not, use ochre's default schedule file.
         if schedule_file:
             house = Dwelling(
                 start_time=start_time,
