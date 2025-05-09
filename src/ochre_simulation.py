@@ -1,13 +1,9 @@
 import os
 import xmltodict
 import click
-import pandas as pd
 from datetime import datetime, timedelta
-from datetime import date
-import time
 import shutil
-from ochre import Dwelling, Analysis, CreateFigures
-from ochre.utils import default_input_path  # for using sample files
+from ochre import Dwelling
 
 """
 Code for running simulations on OCHRE.
@@ -55,48 +51,37 @@ def simulate_dwelling(
     building_folder = f"bldg{building_id:07}-up{upgrade_id:02}"
     data_folder_path = os.path.join(os.path.dirname(os.path.dirname(os.getcwd())), "data")
 
-    input_filepath = os.path.join(data_folder_path, f"/building_energy_models/{state}_{year}_{version}/{building_folder}")
+    input_filepath = os.path.join(data_folder_path, "/building_energy_models/"
+                                  f"{state}_{year}_{version}/{building_folder}")
     # Load XML and schedule file
     xml_file = None
     schedule_file = None
     for file in os.listdir(input_filepath):
         if file.endswith(".xml"):
             xml_file = os.path.join(input_filepath, file)
+            # Extract weather station name if XML file exists
+            weather_station = extract_weather_station(xml_file)
+            weather_file=os.path.join(data_folder_path,f"weather/BuildStock_TMY3_FIPS/{weather_station}.epw")
         elif file.endswith(".csv"):
             schedule_file = os.path.join(input_filepath, file)
-
-    # Check that XML and schedule files exist. Import relevant if they do.
-    if xml_file:
-        # Extract weather station name if XML file exists
-        weather_station = extract_weather_station(xml_file)
-        weather_file=os.path.join(data_folder_path,f"weather/BuildStock_TMY3_FIPS/{weather_station}.epw")
-    else:
+    if not xml_file:
         print(f"Building XML file does not exist for: bldg{building_id:07}-up{upgrade_id:02}")
         return
     if not schedule_file:
         print(f"Missing schedule file in: bldg{building_id:07}-up{upgrade_id:02}")
 
     # Save simulation output to /ochre-sims/data/ochre_simulation/state_year_version
-    output_filepath = os.path.join(data_folder_path, f"output/ochre_simulation/{state}_{year}_{version}/bldg{building_id:07}-up{upgrade_id:02}")
+    output_filepath = os.path.join(data_folder_path, 
+                        f"output/ochre_simulation/{state}_{year}_{version}"
+                        "/bldg{building_id:07}-up{upgrade_id:02}")
     os.makedirs(output_filepath, exist_ok=True)
     try:
-        # If the building id specific schedule file exists, use that. If not, use ochre's default schedule file.
-        if schedule_file:
-            house = Dwelling(
+        house = Dwelling(
                 start_time=start_time,
                 time_res=time_res,
                 duration=duration,
                 hpxml_file=xml_file,
                 hpxml_schedule_file=schedule_file,
-                output_path=output_filepath,
-                weather_file=weather_file,
-            )
-        else:
-            house = Dwelling(
-                start_time=start_time,
-                time_res=time_res,
-                duration=duration,
-                hpxml_file=xml_file,
                 output_path=output_filepath,
                 weather_file=weather_file,
             )
