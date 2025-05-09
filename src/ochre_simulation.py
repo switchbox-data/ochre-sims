@@ -53,21 +53,23 @@ def simulate_dwelling(
     """
 
     building_folder = f"bldg{building_id:07}-up{upgrade_id:02}"
-    input_file_path = os.path.join(os.path.dirname(os.path.dirname(os.getcwd())), f"data/building_energy_models/{state}_{year}_{version}/{building_folder}")
+    data_folder_path = os.path.join(os.path.dirname(os.path.dirname(os.getcwd())), "data")
 
+    input_filepath = os.path.join(data_folder_path, f"/building_energy_models/{state}_{year}_{version}/{building_folder}")
     # Load XML and schedule file
     xml_file = None
     schedule_file = None
-    for file in os.listdir(input_file_path):
+    for file in os.listdir(input_filepath):
         if file.endswith(".xml"):
-            xml_file = os.path.join(input_file_path, file)
+            xml_file = os.path.join(input_filepath, file)
         elif file.endswith(".csv"):
-            schedule_file = os.path.join(input_file_path, file)
+            schedule_file = os.path.join(input_filepath, file)
 
     # Check that XML and schedule files exist. Import relevant if they do.
     if xml_file:
         # Extract weather station name if XML file exists
-        weatherStation = extract_weather_station(xml_file)
+        weather_station = extract_weather_station(xml_file)
+        weather_file=os.path.join(data_folder_path,f"weather/BuildStock_TMY3_FIPS/{weather_station}.epw")
     else:
         print(f"Building XML file does not exist for: bldg{building_id:07}-up{upgrade_id:02}")
         return
@@ -75,7 +77,7 @@ def simulate_dwelling(
         print(f"Missing schedule file in: bldg{building_id:07}-up{upgrade_id:02}")
 
     # Save simulation output to /ochre-sims/data/ochre_simulation/state_year_version
-    output_filepath = os.path.join(os.path.dirname(os.path.dirname(os.getcwd())), f"data/ochre_simulation/{state}_{year}_{version}/bldg{building_id:07}-up{upgrade_id:02}")
+    output_filepath = os.path.join(data_folder_path, f"output/ochre_simulation/{state}_{year}_{version}/bldg{building_id:07}-up{upgrade_id:02}")
     os.makedirs(output_filepath, exist_ok=True)
     try:        
         if schedule_file:
@@ -86,7 +88,7 @@ def simulate_dwelling(
                 hpxml_file=xml_file,
                 hpxml_schedule_file=schedule_file,
                 output_path=output_filepath,
-                weather_file=os.path.join(os.path.dirname(os.path.dirname(os.getcwd())),"data","weather","BuildStock_TMY3_FIPS", f"{weatherStation}.epw"),
+                weather_file=weather_file,
             )
         else:
             house = Dwelling(
@@ -95,14 +97,14 @@ def simulate_dwelling(
                 duration=duration,
                 hpxml_file=xml_file,
                 output_path=output_filepath,
-                weather_file=os.path.join(os.path.dirname(os.path.dirname(os.getcwd())),"data","weather","BuildStock_TMY3_FIPS", f"{weatherStation}.epw"),
+                weather_file=weather_file,
             )
-        df = house.simulate()
+        house.simulate()
                 
     except Exception as e:
         print(f"Simulation failed for bldg{building_id:07}-up{upgrade_id:02}: {e}")
         # Delete failed simulation file
-        path = os.path.join(input_file_path, "simulation_results")
+        path = os.path.join(input_filepath, "simulation_results")
         if os.path.exists(path):
             try:
                 shutil.rmtree(path)
