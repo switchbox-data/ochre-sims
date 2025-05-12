@@ -24,6 +24,16 @@ def extract_weather_station(file_path):
 
     return weather_station_name
 
+def remove_directory(path):
+    if os.path.exists(path):
+        try:
+            shutil.rmtree(path)
+        except Exception as e:
+            print(f"Error deleting {path}: {e}")
+    else:
+        print(f"The filepath does not exist: {path}")
+
+
 @click.command()
 @click.argument('building_id', type=int)
 @click.argument('upgrade_id', type=int)
@@ -92,15 +102,9 @@ def simulate_dwelling(
                 
     except Exception as e:
         print(f"Simulation failed for bldg{building_id:07}-up{upgrade_id:02}: {e}")
-        # Delete failed simulation file
-        path = os.path.join(input_filepath, "simulation_results")
-        if os.path.exists(path):
-            try:
-                shutil.rmtree(path)
-            except Exception as e:
-                print(f"Error deleting {path}: {e}")
-        else:
-            print(f"The directory does not exist: {path}")
+        # Remove failed simulation file
+        output_path = os.path.join(input_filepath, "simulation_results")
+        remove_directory(output_path)
     
 
 if __name__ == '__main__':
