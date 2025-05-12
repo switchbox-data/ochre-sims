@@ -1,4 +1,5 @@
 import os
+import sys
 import xmltodict
 import click
 from datetime import datetime, timedelta
@@ -59,21 +60,18 @@ def simulate_dwelling(
     input_filepath = os.path.join(data_folder_path, "building_energy_models/"
                                   f"{state}_{hpxml_year}_{version}/{building_folder}")
     # Load XML and schedule file
-    xml_file = None
-    schedule_file = None
-    for file in os.listdir(input_filepath):
-        if file.endswith(".xml"):
-            xml_file = os.path.join(input_filepath, file)
-            # Extract weather station name if XML file exists
-            weather_station = extract_weather_station(xml_file)
-            weather_file=os.path.join(data_folder_path,f"weather/BuildStock_TMY3_FIPS/{weather_station}.epw")
-        elif file.endswith(".csv"):
-            schedule_file = os.path.join(input_filepath, file)
-    if not xml_file:
-        print(f"Building XML file does not exist for: bldg{building_id:07}-up{upgrade_id:02}")
-        return
-    if not schedule_file:
-        print(f"Missing schedule file in: bldg{building_id:07}-up{upgrade_id:02}")
+    xml_file = os.path.join(input_filepath, f"bldg{building_id:07}-up{upgrade_id:02}.xml")
+    try:
+        weather_station = extract_weather_station(xml_file)
+        weather_file=os.path.join(data_folder_path,f"weather/BuildStock_TMY3_FIPS/{weather_station}.epw")
+    except Exception as e:
+        print(f"Building XML file does not exist for {xml_file} : {e}")
+        sys.exit(1)
+
+    schedule_file = os.path.join(input_filepath, f"bldg{building_id:07}-up{upgrade_id:02}_schedule.csv")
+    if not os.path.exists(schedule_file):
+        print(f"Schedule file does not exist: {schedule_file}")
+        sys.exit(1)
 
     # Save simulation output to /ochre-sims/data/ochre_simulation/state_year_version
     output_filepath = os.path.join(data_folder_path, 
