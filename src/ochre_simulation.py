@@ -27,11 +27,16 @@ def extract_weather_station(file_path):
 @click.argument('building_id', type=int)
 @click.argument('upgrade_id', type=int)
 @click.argument('state', type=str)
+@click.argument('start_time', default=datetime(2007, 1, 1, 0, 0),type=click.DateTime(formats=["%Y/%m/%d"]))
+@click.argument('time_res', default=60,type=int)
+@click.argument('duration', default=3,type=int)
+@click.option('--hpxml_year', default=2024,type=int, help="Release year of HPXML files")
+@click.option('--version', default="resstock_amy2018_release_1.1",type=str, help="Relese version of the HPXML metadata")
 def simulate_dwelling(
         building_id:int,
         upgrade_id:int,
         state:str,
-        year=2022,
+        hpxml_year=2024,
         version="resstock_amy2018_release_1.1",
         start_time=datetime(2007, 1, 1, 0, 0),
         time_res=timedelta(minutes=60),
@@ -51,8 +56,8 @@ def simulate_dwelling(
     building_folder = f"bldg{building_id:07}-up{upgrade_id:02}"
     data_folder_path = os.path.join(os.path.dirname(os.path.dirname(os.getcwd())), "data")
 
-    input_filepath = os.path.join(data_folder_path, "/building_energy_models/"
-                                  f"{state}_{year}_{version}/{building_folder}")
+    input_filepath = os.path.join(data_folder_path, "building_energy_models/"
+                                  f"{state}_{hpxml_year}_{version}/{building_folder}")
     # Load XML and schedule file
     xml_file = None
     schedule_file = None
@@ -72,8 +77,8 @@ def simulate_dwelling(
 
     # Save simulation output to /ochre-sims/data/ochre_simulation/state_year_version
     output_filepath = os.path.join(data_folder_path, 
-                        f"output/ochre_simulation/{state}_{year}_{version}"
-                        "/bldg{building_id:07}-up{upgrade_id:02}")
+                        f"output/ochre_simulation/{state}_{hpxml_year}_{version}",
+                        f"bldg{building_id:07}-up{upgrade_id:02}")
     os.makedirs(output_filepath, exist_ok=True)
     try:
         house = Dwelling(
