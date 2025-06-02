@@ -1,5 +1,6 @@
 import os
 import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import xmltodict
 import click
 import pandas as pd
@@ -82,8 +83,6 @@ def simulate_dwelling(
     # HPXML file
     house_args['hpxml_file'] = os.path.join(
         dict_sim_params['ochre_input_path'],
-        dict_sim_params['location'],
-        house_id,
         house_args['hpxml_file']
     )
     if not os.path.exists(house_args['hpxml_file']):
@@ -93,22 +92,19 @@ def simulate_dwelling(
     # Schedule file
     house_args['hpxml_schedule_file'] = os.path.join(
         dict_sim_params['ochre_input_path'],
-        dict_sim_params['location'],
-        house_id,
         house_args['hpxml_schedule_file']
     )
     if not os.path.exists(house_args['hpxml_schedule_file']):
-        print(f"HPXML file does not exist: {house_args['hpxml_schedule_file']}")
+        print(f"Schedule file does not exist: {house_args['hpxml_schedule_file']}")
         sys.exit(1)
     # Weather File
+    weather_station = f"{extract_weather_station(house_args['hpxml_file'])}.epw"
     house_args['weather_file'] = os.path.join(
         dict_sim_params['ochre_input_path'],
-        dict_sim_params['location'],
-        house_id,
-        house_args['weather_file']
+        weather_station
     )
     if not os.path.exists(house_args['weather_file']):
-        print(f"HPXML file does not exist: {house_args['weather_file']}")
+        print(f"Weather file does not exist: {house_args['weather_file']}")
         sys.exit(1)
 
     try:
