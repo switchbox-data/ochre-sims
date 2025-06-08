@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 import shutil
 from ochre import Dwelling
 from constants import dict_sim_params
-
+import json
+from ochre.utils import convert, OCHREException
 """
 Code for running simulations on OCHRE.
 
@@ -54,12 +55,81 @@ def remove_directory(path):
     else:
         print(f"The filepath does not exist: {path}")
 
+def get_HP_info(HP_id:int):
+    with open('HP.json', 'r') as file:
+        HP_info = json.load(file)
+    return HP_info[HP_id]
+
+def create_HP_equipment(HP_info:dict, hvac_type:str):
+    name = HP_info['heat_pump_type']
+    fuel = HP_info['fuel_type']
+    capacity = HP_info[f'{hvac_type.lower()}_capacity']
+    space_fraction = HP_info[f'fraction_{hvac_type.lower()}_load_served']
+    efficiency = HP_info[f'annual_{hvac_type.lower()}_efficiency']
+    efficiency_string = (f"{HP_info[f'annual_{hvac_type.lower()}_efficiency']} " 
+                         f"{HP_info[f'annual_{hvac_type.lower()}_efficiency_units']}")
+    if HP_info[f'annual_{hvac_type.lower()}_efficiency_units'] in ['Percent', 'AFUE']:
+        eir = 1 / efficiency
+        if HP_info[f'annual_{hvac_type.lower()}_efficiency_units'] == 'Percent':
+            efficiency *= 100
+    elif HP_info[f'annual_{hvac_type.lower()}_efficiency_units'] in ['EER', 'SEER', 'HSPF']:
+        eir = 1 / convert(efficiency, 'Btu/hour', 'W')
+    else:
+        raise OCHREException(f'Unknown inputs for HVAC {hvac_type} efficiency: {efficiency}')
+    
+    # Get number of speeds
+    speed_options = {
+        'single stage': 1,
+        'two stage': 2,
+        'variable speed': 4,
+    }
+    if name == 'mini-split':
+        number_of_speeds = 4  # MSHP always variable speed
+    elif HP_info['compressor_type'] in speed_options:
+        number_of_speeds = speed_options[HP_info['compressor_type']]
+    elif convert(1 / eir, 'W', 'Btu/hour') <= 15:
+        number_of_speeds = 1  # Single-speed for SEER <= 15
+    elif convert(1 / eir, 'W', 'Btu/hour') <= 21:
+        number_of_speeds = 2  # Two-speed for 15 < SEER <= 21
+    else:
+        number_of_speeds = 4  # Variable speed for SEER > 21
+
+    is_heater = hvac_type == 'Heating'
+    if is_heater:
+        shr = None
+    else:
+        shr = HP_info['sensible_heat_ratio']
+
+    if "fan_power_Watts_per_CFM" in HP_info:
+        # Note: air flow rate is only used for non-dymanic HVAC models with fans, e.g., furnaces
+        # airflow_cfm = hvac_ext.get(f'{hvac_type}AirflowCFM', 0)
+        cfm_per_ton = 350 if is_heater else 312
+        power_per_cfm = HP_info["fan_power_Watts_per_CFM"]
+        aux_power = power_per_cfm * cfm_per_ton * convert(capacity, 'W', 'refrigeration_ton')
+
+    HP = {
+        'Equipment Name': name,
+        'Fuel': fuel.capitalize(),
+        'Capacity (W)': capacity,
+        'EIR (-)': eir,
+        'Rated Efficiency': efficiency_string,
+        'SHR (-)': shr,
+        'Conditioned Space Fraction (-)': space_fraction,
+        'Number of Speeds (-)': number_of_speeds,
+        'Rated Auxiliary Power (W)': aux_power,
+    }
+
+    return HP
+
+
 @click.command()
 @click.argument('building_id', type=int)
 @click.argument('upgrade_id', type=int)
+@click.argument('hp_id', type=int)
 def swap_HP(
         building_id:int,
-        upgrade_id:int
+        upgrade_id:int,
+        hp_id:int
         ):
     """
     simulate: This function runs an OCHRE simulation for a building. It filters the building by the
@@ -109,7 +179,7 @@ def swap_HP(
 
     try:
         dwelling = Dwelling(**house_args)
-        dwelling.simulate()
+        print(dwelling.equipment['Air Conditioner'])
     except Exception as e:
         print(f"Simulation failed for bldg{building_id:07}-up{upgrade_id:02}: {e}")
     
