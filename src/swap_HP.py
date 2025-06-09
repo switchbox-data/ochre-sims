@@ -9,7 +9,9 @@ import shutil
 from ochre import Dwelling
 from constants import dict_sim_params
 import json
-from ochre.utils import convert, OCHREException
+from ochre.utils import convert, OCHREException, nested_update, load_schedule, update_equipment_properties
+from ochre.utils.hpxml import parse_hpxml_occupancy, parse_hpxml_envelope, parse_hpxml_equipment, import_hpxml, load_hpxml
+from ochre.Models import Envelope
 """
 Code for running simulations on OCHRE.
 
@@ -25,7 +27,7 @@ HOUSE_DEFAULT_ARGS = {
 'start_time': dict_sim_params['start_time'],
 'time_res': dict_sim_params['time_step'],
 'duration': dict_sim_params['duration'],
-'initialization_time': timedelta(days=7),
+'initialization_time': timedelta(days=1),
 'ext_time_res': dict_sim_params['freq_hems'], #HEMS model aggregates data to this timestep. Should be greater than house frequency
 
 # Output settings
@@ -56,9 +58,13 @@ def remove_directory(path):
         print(f"The filepath does not exist: {path}")
 
 def get_HP_info(HP_id:int):
-    with open('HP.json', 'r') as file:
+    with open('inputs/equipments/HP.json', 'r') as file:
         HP_info = json.load(file)
-    return HP_info[HP_id]
+    # Find the heat pump with matching id in the ASHP array
+    for hp in HP_info['ASHP']:
+        if hp['id'] == HP_id:
+            return hp
+    raise ValueError(f"No heat pump found with id {HP_id}")
 
 def create_HP_equipment(HP_info:dict, hvac_type:str):
     name = HP_info['heat_pump_type']
@@ -178,8 +184,35 @@ def swap_HP(
         sys.exit(1)
 
     try:
+        # Baseline simulation
         dwelling = Dwelling(**house_args)
-        print(dwelling.equipment['Air Conditioner'])
+
+        # Load properties from HPXML file
+        properties, weather_station = load_hpxml(**house_args)
+        # Load occupancy schedule and weather files
+        schedule, location = load_schedule(
+            properties, weather_station=weather_station, **house_args
+        )
+        properties["location"] = location
+        # Update args for initializing Envelope and Equipment
+        sim_args = {
+            **house_args,
+            "start_time": dwelling.start_time,  # updates time zone if necessary
+            "schedule": schedule,
+            "initial_schedule": schedule.loc[dwelling.start_time].to_dict(),
+            "output_path": dwelling.output_path,
+        }
+        # initial_schedule.update(self.envelope.get_main_states())
+        sim_args["envelope_model"] = dwelling.envelope
+        HP1 = create_HP_equipment(get_HP_info(1), 'Cooling')
+        properties['equipment']['HVAC Cooling'].update(HP1)
+
+        # Add detailed equipment properties, including ZIP parameters
+        equipment_dict = update_equipment_properties(properties, **sim_args)
+        #print(equipment_dict)
+        # continue at Dwelling line 139
+
+        dwelling.simulate()
     except Exception as e:
         print(f"Simulation failed for bldg{building_id:07}-up{upgrade_id:02}: {e}")
     
