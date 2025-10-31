@@ -1,0 +1,209 @@
+---
+title: "OCHRE vs ResStock Comparison"
+format:
+  html:
+    code-fold: true
+jupyter: python3
+---
+
+Comparison between OCHRE simulation and ResStock end use load profile
+
+```{python}
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# Input parameters
+state = "NY"
+year = 2022
+ochre_version = "resstock_amy2018_release_1.1"
+resstock_version = "tmy3_release_1"
+
+building_id = 72
+upgrade_id = 3
+print(f"Comparison for building {building_id}, upgrade {upgrade_id}.")
+
+building_folder = f"bldg{building_id:07}-up{upgrade_id:02}"
+
+ochre_filepath = f"/workspaces/ochre-sims/data/ochre_simulation/{state}_{year}_{ochre_version}/{building_folder}/ochre.csv"
+resstock_filepath = f"/workspaces/ochre-sims/data/resstock_timeseries/{state}_{year}_resstock_{resstock_version}/{building_folder}/resstock_timeseries_{building_id}-{upgrade_id}.csv"
+
+try:
+  resstock_df = pd.read_csv(resstock_filepath, parse_dates=['timestamp'])
+  resstock_df.rename(columns={'timestamp': 'Time'}, inplace=True)
+  resstock_df.set_index('Time', inplace=True)
+except Exception as e:
+  print("Error reading ResStock timeseries")
+try:
+  ochre_df = pd.read_csv(ochre_filepath, parse_dates=['Time'])
+  ochre_df.set_index('Time', inplace=True)
+except Exception as e:
+  print("Error reading ochre simulation timeseries")
+
+# Data prep
+
+resstock_df_daily = resstock_df.resample('D').sum().reset_index()
+# Convert electrical power to consumption in Ochre simulation results
+ochre_df['Total Electric Consumption (kWh)'] = ochre_df['Total Electric Power (kW)'] * (ochre_df.index[1] - ochre_df.index[0]).total_seconds() / 3600
+# Convert natural gas power to consumption (kWh) in Ochre simulation results. ResStock reports all energy use in kWh
+therms_to_kWh = 29.3001
+ochre_df['Total Natural Gas Consumption (kWh)'] = ochre_df['Total Gas Power (therms/hour)'] * ((ochre_df.index[1] - ochre_df.index[0]).total_seconds() / 3600) * therms_to_kWh
+# Aggregate power results by mean, and consumption results by sum
+agg_dict = {col: 'mean' for col in ochre_df.columns}  # Default: mean for all columns because they are in power or temperature
+agg_dict['Total Electric Consumption (kWh)'] = 'sum'  # Exception: sum for this consumption
+agg_dict['Total Natural Gas Consumption (kWh)'] = 'sum'  # Exception: sum for this consumption
+ochre_df_daily = ochre_df.resample('D').agg(agg_dict).reset_index()
+merged_df = pd.merge(resstock_df_daily, ochre_df_daily, on='Time', how='inner')
+
+
+##############################################################################
+# Plot 1: annual electricity consumption profile. Aggregated daily.
+resstock_electricity = merged_df['out.electricity.total.energy_consumption']
+ochre_electricity = merged_df['Total Electric Consumption (kWh)']
+
+resstock_electricity_mean  = np.mean(resstock_electricity)
+ochre_electricity_mean  = np.mean(ochre_electricity)
+
+# Calculate error metrics
+mae = np.mean(np.abs(resstock_electricity - ochre_electricity))
+rmse = np.sqrt(np.mean((resstock_electricity - ochre_electricity) ** 2))
+
+print(f"Daily Electricity Consumption Mean Absolute Error (MAE): {mae:.2f} kWh")
+print(f"Daily Electricity Consumption Root Mean Squared Error (RMSE): {rmse:.2f} kWh")
+print(f"Daily Electricity Consumption Root Mean Squared Error (RMSE as Percentage of ResStock Mean: {rmse/resstock_electricity_mean*100:.2f} %")
+print(f"Daily Electricity Consumption Root Mean Squared Error (RMSE as Percentage of OCHRE Mean: {rmse/ochre_electricity_mean*100:.2f} %")
+
+# Calculate residuals
+merged_df['residual'] = resstock_electricity - ochre_electricity
+
+# Plotting
+fig, axs = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+
+# Top plot: Time series
+axs[0].plot(merged_df['Time'], resstock_electricity, label='ResStock Daily Electricity Consumption (kWh)', color='blue')
+axs[0].plot(merged_df['Time'], ochre_electricity, label='Ochre Daily Electric Consumption (kWh)', color='orange')
+axs[0].axhline(resstock_electricity_mean, color='green', linestyle='-', label='ResStock Average')
+axs[0].axhline(ochre_electricity_mean, color='red', linestyle='-',label='Ochre Average')
+axs[0].set_ylabel('Daily Electric Consumption (kWh)')
+axs[0].set_title(f'Building {building_id} Upgrade {upgrade_id} - Daily Electric Consumption Comparison: ResStock vs Ochre')
+axs[0].legend()
+axs[0].grid(True)
+
+# Bottom plot: Residuals
+axs[1].plot(merged_df['Time'], merged_df['residual'], label='Residual (ResStock minus Ochre)', color='red')
+axs[1].axhline(0, color='black', linestyle='--')
+axs[1].set_xlabel('Time')
+axs[1].set_ylabel('Residual Daily Electrical Power Consumption (kWh)')
+axs[1].set_title(f'Building {building_id} Upgrade {upgrade_id} - Residuals Between ResStock and Ochre Electricity Use')
+axs[1].legend()
+axs[1].grid(True)
+
+plt.tight_layout()
+plt.show()
+##############################################################################
+# Plot 2: Daily Natural gas consumption.
+# Calculate error metrics
+resstock_gas = merged_df['out.natural_gas.total.energy_consumption']
+ochre_gas = merged_df['Total Natural Gas Consumption (kWh)']
+
+mae = np.mean(np.abs(resstock_gas - ochre_gas))
+rmse = np.sqrt(np.mean((resstock_gas - ochre_gas) ** 2))
+
+resstock_gas_mean  = np.mean(resstock_gas)
+ochre_gas_mean  = np.mean(ochre_gas)
+
+if resstock_gas_mean == 0:
+  resstock_gas_rmse_percent = 0
+else:
+  resstock_gas_rmse_percent  = rmse/resstock_gas_mean*100
+
+if ochre_gas_mean == 0:
+  ochre_gas_rmse_percent = 0
+else:
+  ochre_gas_rmse_percent  = rmse/ochre_gas_mean*100
+
+print(f"Daily Natural Gas Consumption Mean Absolute Error (MAE): {mae:.2f} kWh")
+print(f"Daily Natural Gas Root Mean Squared Error (RMSE): {rmse:.2f} kWh")
+print(f"Daily Electricity Consumption Root Mean Squared Error (RMSE as Percentage of ResStock Mean: {resstock_gas_rmse_percent:.2f} %")
+print(f"Daily Electricity Consumption Root Mean Squared Error (RMSE as Percentage of OCHRE Mean: {ochre_gas_rmse_percent:.2f} %")
+
+# Calculate residuals
+merged_df['residual'] = resstock_gas - ochre_gas
+
+# Plotting
+fig, axs = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+# Top plot: Time series
+axs[0].plot(merged_df.index, resstock_gas, label='ResStock Daily Gas Consumption (kWh)', color='blue')
+axs[0].plot(merged_df.index, ochre_gas, label='Ochre Daily Gas Consumption (kWh)', color='orange')
+axs[0].set_ylabel('Daily Gas Consumption (kWh)', fontsize=14)
+axs[0].set_title(f'Building {building_id} Upgrade {upgrade_id} - Daily Gas Consumption Comparison: ResStock vs Ochre', fontsize=18)
+axs[0].legend()
+plt.xticks(fontsize=12)
+plt.yticks(fontsize=12)
+axs[0].grid(True)
+
+# Bottom plot: Residuals
+axs[1].plot(merged_df.index, merged_df['residual'], label='Residual (ResStock minus Ochre)', color='red')
+axs[1].axhline(0, color='black', linestyle='--')
+axs[1].set_xlabel('Time', fontsize=14)
+axs[1].set_ylabel('Residual Daily Gas Consumption (kWh)', fontsize=14)
+axs[1].set_title(f'Building {building_id} Upgrade {upgrade_id} - Residuals Between ResStock and Ochre Gas Use', fontsize=18)
+axs[1].legend()
+plt.xticks(fontsize=12)
+plt.yticks(fontsize=12)
+axs[1].grid(True)
+
+plt.tight_layout()
+plt.show()
+
+
+##############################################################################
+# Plot 3: Hourly distribution of OCHRE vs ResStock electrical consumption in the winter
+# Find the week where HVAC electrical consumption in OCHRE is maximum
+ochre_df_weekly = ochre_df.resample('W').agg(agg_dict).reset_index()
+ochre_winter_df = ochre_df_weekly[ochre_df_weekly['Time'].dt.month.isin([1, 2, 11, 12])] # Winter month is Jan, Feb, Nov, Dec
+max_index = ochre_winter_df['HVAC Heating Electric Power (kW)'].idxmax()
+
+# Create hourly aggregated dataframes
+resstock_df_hourly = resstock_df.resample('h').sum().reset_index()
+ochre_df_hourly = ochre_df.resample('h').agg(agg_dict).reset_index()
+merged_df = pd.merge(resstock_df_hourly, ochre_df_hourly, on='Time', how='inner')
+winter_design_week = ochre_winter_df.loc[[max_index]]['Time'][0]
+winter_design_df = merged_df[(merged_df['Time'] >= winter_design_week - pd.Timedelta(days=3)) & (merged_df['Time'] <= winter_design_week + pd.Timedelta(days=3))]
+
+resstock_electricity = winter_design_df['out.electricity.total.energy_consumption']
+ochre_electricity = winter_design_df['Total Electric Consumption (kWh)']
+resstock_electricity_mean  = np.mean(resstock_electricity)
+ochre_electricity_mean  = np.mean(ochre_electricity)
+residuals = resstock_electricity - ochre_electricity
+
+# Plotting
+fig, axs = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+
+# Top plot: Time series
+axs[0].plot(winter_design_df['Time'], resstock_electricity, label='ResStock Hourly Electricity Consumption (kWh)', color='blue')
+axs[0].plot(winter_design_df['Time'], ochre_electricity, label='Ochre Hourly Electric Consumption (kWh)', color='orange')
+axs[0].axhline(resstock_electricity_mean, color='green', linestyle='-', label='ResStock Average')
+axs[0].axhline(ochre_electricity_mean, color='red', linestyle='-',label='Ochre Average')
+axs[0].set_ylabel('Hourly Electric Consumption (kWh)')
+axs[0].set_title(f'Building {building_id} Upgrade {upgrade_id} - Hourly Electric Consumption Comparison During Design Winter Week: ResStock vs Ochre')
+axs[0].legend()
+axs[0].grid(True)
+
+# Bottom plot: Residuals
+axs[1].plot(winter_design_df['Time'], residuals, label='Residual (ResStock minus Ochre)', color='red')
+axs[1].axhline(0, color='black', linestyle='--')
+axs[1].set_xlabel('Time')
+axs[1].set_ylabel('Residual Hourly Electrical Power Consumption (kWh)')
+axs[1].set_title(f'Building {building_id} Upgrade {upgrade_id} - Residuals Between ResStock and Ochre Electricity Use')
+axs[1].legend()
+axs[1].grid(True)
+
+plt.tight_layout()
+plt.show()
+
+
+
+
+```

@@ -1,0 +1,11 @@
+ochre_simulation:
+    @read -p "Enter the building ID to simulate: " building_id && \
+    read -p "Enter the upgrade ID to runthe simulation: " upgrade_id && \
+    read -p "Enter the state the building is located in: " state && \
+    read -p "Enter the year of release for the hpxml_year: " hpxml_year && \
+    read -p "Enter the start date for the simulation in YYYY/MM/DD format: " start_time && \
+    read -p "Enter the time resolution of the simulation in minutes: " time_res && \
+    read -p "Enter the duration of the simulation in days: " duration && \
+    python ochre_simulation.py $building_id $upgrade_id $state $start_time $time_res $duration --hpxml_year $hpxml_year
+
+
